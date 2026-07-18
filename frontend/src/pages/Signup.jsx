@@ -1,7 +1,10 @@
-import AuthSidePanel from './AuthSidePanel.jsx'
-import { GoogleIcon, GithubIcon } from './icons.jsx'
+import { Link, useNavigate } from 'react-router-dom'
+import AuthSidePanel from '../components/AuthSidePanel.jsx'
+import { GoogleIcon, GithubIcon } from '../components/icons.jsx'
 
-export default function Signup({ onSwitchToLogin }) {
+export default function Signup() {
+  const navigate = useNavigate()
+
   return (
     <main className="flex min-h-screen overflow-hidden bg-surface">
       <AuthSidePanel />
@@ -59,7 +62,10 @@ export default function Signup({ onSwitchToLogin }) {
           {/* Traditional Form */}
           <form
             className="space-y-stack-md"
-            onSubmit={(e) => e.preventDefault()}
+            onSubmit={(e) => {
+              e.preventDefault()
+              navigate('/dashboard')
+            }}
           >
             <div className="space-y-1.5">
               <label
@@ -128,16 +134,9 @@ export default function Signup({ onSwitchToLogin }) {
           {/* Footer Link */}
           <p className="pt-2 text-center font-body-md text-body-md text-secondary">
             Already have an account?{' '}
-            <a
-              className="font-bold text-primary hover:underline"
-              href="#"
-              onClick={(e) => {
-                e.preventDefault()
-                onSwitchToLogin?.()
-              }}
-            >
+            <Link className="font-bold text-primary hover:underline" to="/login">
               Log in
-            </a>
+            </Link>
           </p>
 
           {/* Terms */}

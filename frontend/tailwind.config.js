@@ -71,6 +71,7 @@ export default {
       },
       fontFamily: {
         'headline-lg': ['Geist', 'sans-serif'],
+        'headline-sm': ['Geist', 'sans-serif'],
         'body-md': ['Geist', 'sans-serif'],
         'body-lg': ['Geist', 'sans-serif'],
         'label-md': ['Geist', 'sans-serif'],
@@ -82,6 +83,10 @@ export default {
         'headline-lg': [
           '32px',
           { lineHeight: '40px', letterSpacing: '-0.02em', fontWeight: '600' },
+        ],
+        'headline-sm': [
+          '18px',
+          { lineHeight: '24px', letterSpacing: '-0.005em', fontWeight: '700' },
         ],
         'body-md': ['14px', { lineHeight: '20px', fontWeight: '400' }],
         'body-lg': ['16px', { lineHeight: '24px', fontWeight: '400' }],

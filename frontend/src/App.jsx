@@ -1,15 +1,18 @@
-import { useState } from 'react'
-import Login from './Login.jsx'
-import Signup from './Signup.jsx'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import Login from './pages/Login.jsx'
+import Signup from './pages/Signup.jsx'
+import Dashboard from './pages/Dashboard.jsx'
 
 function App() {
-  const [page, setPage] = useState('login')
-
-  if (page === 'signup') {
-    return <Signup onSwitchToLogin={() => setPage('login')} />
-  }
-
-  return <Login onSwitchToSignup={() => setPage('signup')} />
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  )
 }
 
 export default App
