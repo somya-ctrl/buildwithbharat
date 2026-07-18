@@ -1,0 +1,112 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String            @id @default(uuid())
+  name             String
+  email            String            @unique
+  password         String
+  avatarUrl        String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  workspacesOwned  Workspace[]       @relation("WorkspaceOwner")
+  workspaceMembers WorkspaceMember[]
+  messages         ChatMessage[]
+  meetingsHosted   Meeting[]         @relation("MeetingHost")
+  notifications    Notification[]
+  filesCreated     File[]            @relation("FileCreator")
+}
+
+model Workspace {
+  id               String            @id @default(uuid())
+  name             String
+  ownerId          String
+  owner            User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  members          WorkspaceMember[]
+  files            File[]
+  messages         ChatMessage[]
+  meetings         Meeting[]
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model WorkspaceMember {
+  id          String     @id @default(uuid())
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        MemberRole @default(MEMBER)
+  joinedAt    DateTime   @default(now())
+
+  @@unique([workspaceId, userId])
+}
+
+model File {
+  id          String        @id @default(uuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  content     String        @default("")
+  isFolder    Boolean       @default(false)
+  parentId    String?
+  parent      File?         @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    File[]        @relation("FileHierarchy")
+  createdById String
+  createdBy   User          @relation("FileCreator", fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  versions    FileVersion[]
+}
+
+model FileVersion {
+  id             String   @id @default(uuid())
+  fileId         String
+  file           File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  content        String
+  versionNumber  Int
+  updatedById    String
+  createdAt      DateTime @default(now())
+}
+
+model ChatMessage {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  senderId    String
+  sender      User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text        String
+  createdAt   DateTime  @default(now())
+}
+
+model Meeting {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  hostId      String
+  host        User      @relation("MeetingHost", fields: [hostId], references: [id], onDelete: Cascade)
+  title       String    @default("Sync Meeting")
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  endedAt     DateTime?
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
