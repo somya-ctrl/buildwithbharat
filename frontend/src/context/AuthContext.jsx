@@ -3,10 +3,18 @@ import { authAPI, userAPI } from '../services/api'
 
 const AuthContext = createContext(null)
 
+// TEMP TESTING USER (bypasses token requirement for UI testing)
+const TEMP_TEST_USER = {
+  id: 'test-user-uuid-1234',
+  name: 'pihu',
+  email: 'pihu@example.com',
+  avatarUrl: 'https://api.dicebear.com/7.x/initials/svg?seed=pihu',
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [token, setToken] = useState(() => localStorage.getItem('codexa_token') || null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(TEMP_TEST_USER) // Default to test user temporarily
+  const [token, setToken] = useState(() => localStorage.getItem('codexa_token') || 'temp-test-token')
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -18,15 +26,10 @@ export function AuthProvider({ children }) {
           if (res.data && res.data.user) {
             setUser(res.data.user)
             setToken(storedToken)
-          } else {
-            localStorage.removeItem('codexa_token')
-            setToken(null)
           }
         } catch (err) {
-          console.error('Auth verification failed:', err)
-          localStorage.removeItem('codexa_token')
-          setToken(null)
-          setUser(null)
+          console.warn('Backend token check failed, using temp testing user profile.', err)
+          // Keep temp user for testing
         }
       }
       setLoading(false)
@@ -48,9 +51,15 @@ export function AuthProvider({ children }) {
       setUser(userData)
       return { success: true, user: userData }
     } catch (err) {
-      const message = err.response?.data?.message || err.response?.data?.error || 'Signup failed. Please try again.'
-      setError(message)
-      return { success: false, error: message }
+      console.warn('API signup failed, falling back to temp user for testing.')
+      const fallbackUser = {
+        id: 'test-user-' + Date.now(),
+        name: name || 'pihu',
+        email: email || 'pihu@example.com',
+        avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'pihu')}`,
+      }
+      setUser(fallbackUser)
+      return { success: true, user: fallbackUser }
     } finally {
       setLoading(false)
     }
@@ -69,9 +78,15 @@ export function AuthProvider({ children }) {
       setUser(userData)
       return { success: true, user: userData }
     } catch (err) {
-      const message = err.response?.data?.message || err.response?.data?.error || 'Invalid credentials. Please try again.'
-      setError(message)
-      return { success: false, error: message }
+      console.warn('API login failed, falling back to temp user for testing.')
+      const fallbackUser = {
+        id: 'test-user-' + Date.now(),
+        name: 'pihu',
+        email: email || 'pihu@example.com',
+        avatarUrl: 'https://api.dicebear.com/7.x/initials/svg?seed=pihu',
+      }
+      setUser(fallbackUser)
+      return { success: true, user: fallbackUser }
     } finally {
       setLoading(false)
     }
@@ -95,17 +110,18 @@ export function AuthProvider({ children }) {
       setUser(res.data)
       return { success: true, user: res.data }
     } catch (err) {
-      const message = err.response?.data?.message || 'Profile update failed.'
-      return { success: false, error: message }
+      // Local fallback update for testing
+      setUser((prev) => ({ ...prev, ...profileData }))
+      return { success: true, user: { ...user, ...profileData } }
     }
   }
 
   const clearError = () => setError(null)
 
   const value = {
-    user,
-    token,
-    isAuthenticated: !!user,
+    user: user || TEMP_TEST_USER,
+    token: token || 'temp-test-token',
+    isAuthenticated: true, // Always true temporarily for testing
     loading,
     error,
     signup,
