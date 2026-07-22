@@ -10,7 +10,8 @@ This guide documents the REST APIs and Socket.IO real-time channels implemented 
 Create a `.env` in the `backend/` directory like this:
 ```env
 PORT=5001
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/buildwithbharat?schema=public"
+DATABASE_URL=DATABASE_URL="postgresql://postgres:somya12@localhost:5432/task-management"
+
 JWT_SECRET="hackathon_super_secret_double_jwt_token_key_991823"
 FRONTEND_URL="http://localhost:5173"
 # REDIS_URL="redis://127.0.0.1:6379" # Optional (falls back to memory)

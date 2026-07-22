@@ -5,11 +5,11 @@ import prisma from '../../lib/prisma';
 import { protect, AuthenticatedRequest } from '../../middleware/authMiddleware';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'hackathon_secret_key_123';
 
 // Generate Token
 const generateToken = (payload: { id: string }): string => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  const secret = process.env.JWT_SECRET || 'hackathon_secret_key_123';
+  return jwt.sign(payload, secret, { expiresIn: '7d' });
 };
 
 // @route   POST /api/auth/signup

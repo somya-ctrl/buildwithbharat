@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
@@ -5,7 +8,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 
@@ -20,9 +22,6 @@ import notificationRoutes from './routes/notifications/notificationRoutes';
 
 // Socket Handler import
 import { initSocketHandler } from './sockets/socketHandler';
-
-// Load Environment Variables Object
-dotenv.config();
 
 const app = express();
 const server = http.createServer(app);

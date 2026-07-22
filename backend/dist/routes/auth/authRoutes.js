@@ -9,10 +9,10 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = __importDefault(require("../../lib/prisma"));
 const authMiddleware_1 = require("../../middleware/authMiddleware");
 const router = (0, express_1.Router)();
-const JWT_SECRET = process.env.JWT_SECRET || 'hackathon_secret_key_123';
 // Generate Token
 const generateToken = (payload) => {
-    return jsonwebtoken_1.default.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+    const secret = process.env.JWT_SECRET || 'hackathon_secret_key_123';
+    return jsonwebtoken_1.default.sign(payload, secret, { expiresIn: '7d' });
 };
 // @route   POST /api/auth/signup
 // @desc    Register a new user

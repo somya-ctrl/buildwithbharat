@@ -1,9 +1,46 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AuthSidePanel from '../components/AuthSidePanel.jsx'
 import { GoogleIcon, GithubIcon } from '../components/icons.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Signup() {
   const navigate = useNavigate()
+  const { signup, loading, error, clearError } = useAuth()
+
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [localError, setLocalError] = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLocalError('')
+    clearError()
+
+    if (!name || !email || !password || !confirmPassword) {
+      setLocalError('Please fill in all fields.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setLocalError('Passwords do not match.')
+      return
+    }
+
+    if (password.length < 6) {
+      setLocalError('Password must be at least 6 characters.')
+      return
+    }
+
+    const result = await signup(name, email, password)
+    if (result.success) {
+      navigate('/dashboard')
+    }
+  }
+
+  const errorMessage = localError || error
 
   return (
     <main className="flex min-h-screen overflow-hidden bg-surface">
@@ -59,14 +96,14 @@ export default function Signup() {
             <div className="flex-grow border-t border-outline-variant" />
           </div>
 
+          {errorMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-400">
+              {errorMessage}
+            </div>
+          )}
+
           {/* Traditional Form */}
-          <form
-            className="space-y-stack-md"
-            onSubmit={(e) => {
-              e.preventDefault()
-              navigate('/dashboard')
-            }}
-          >
+          <form className="space-y-stack-md" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
               <label
                 className="ml-1 font-label-md text-label-md text-secondary"
@@ -77,8 +114,11 @@ export default function Signup() {
               <input
                 id="name"
                 type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Jane Doe"
                 className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 font-body-md outline-none transition-all placeholder:text-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20"
+                required
               />
             </div>
             <div className="space-y-1.5">
@@ -91,8 +131,11 @@ export default function Signup() {
               <input
                 id="email"
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
                 className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 font-body-md outline-none transition-all placeholder:text-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20"
+                required
               />
             </div>
             <div className="space-y-1.5">
@@ -105,8 +148,11 @@ export default function Signup() {
               <input
                 id="password"
                 type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 font-body-md outline-none transition-all placeholder:text-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20"
+                required
               />
             </div>
             <div className="space-y-1.5">
@@ -119,15 +165,23 @@ export default function Signup() {
               <input
                 id="confirm-password"
                 type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
                 className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 font-body-md outline-none transition-all placeholder:text-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20"
+                required
               />
             </div>
             <button
               type="submit"
-              className="mt-2 h-12 w-full rounded-xl bg-primary-container font-label-md text-label-md font-bold text-white shadow-md transition-all hover:bg-primary active:scale-[0.99]"
+              disabled={loading}
+              className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-primary-container font-label-md text-label-md font-bold text-white shadow-md transition-all hover:bg-primary active:scale-[0.99] disabled:opacity-50"
             >
-              Create Account
+              {loading ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                'Create Account'
+              )}
             </button>
           </form>
 

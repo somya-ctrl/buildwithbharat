@@ -4,6 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.io = exports.server = exports.app = void 0;
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
@@ -11,7 +13,6 @@ const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const morgan_1 = __importDefault(require("morgan"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
-const dotenv_1 = __importDefault(require("dotenv"));
 const redis_1 = require("redis");
 const redis_adapter_1 = require("@socket.io/redis-adapter");
 // Routes imports
@@ -24,8 +25,6 @@ const meetingRoutes_1 = __importDefault(require("./routes/meetings/meetingRoutes
 const notificationRoutes_1 = __importDefault(require("./routes/notifications/notificationRoutes"));
 // Socket Handler import
 const socketHandler_1 = require("./sockets/socketHandler");
-// Load Environment Variables Object
-dotenv_1.default.config();
 const app = (0, express_1.default)();
 exports.app = app;
 const server = http_1.default.createServer(app);

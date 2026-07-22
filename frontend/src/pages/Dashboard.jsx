@@ -1,399 +1,1054 @@
+import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar.jsx'
 import Sidebar from '../components/Sidebar.jsx'
 import Footer from '../components/Footer.jsx'
-
-const WORKSPACES = [
-  {
-    icon: 'terminal',
-    tag: 'v1.2.4',
-    name: 'quantum-engine',
-    activity: 'Active 2h ago',
-    lang: 'TypeScript',
-    avatars: [
-      {
-        src: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDiS3dezoIeaVHpsjNrq6QkKnGpiDr-8yVZuktS0yXV8p1mN_4glalChZY2ZDGmijR3YLK7rYU9OLq1r6k4qIdVsimlRCLC8ygKoqLXRI6BdtgvnQ-Rtso_072axYngWj2ERPe0WUNDrUWnjd9nzd0A-qhbGsZnIplp5_tfEPlF6VsBbxcOfteLIyph4VAbb0I1PRytm-uF6NkPsVm2hFh77DSW2ZQCJ64MW_JzzG3WiRCMazCKzFlt3-PNWJy7VD0DVCroXwIO_OJD',
-      },
-    ],
-    extraCount: 3,
-  },
-  {
-    icon: 'rocket_launch',
-    tag: 'prod-beta',
-    name: 'nebula-dashboard',
-    activity: 'Active 5m ago',
-    lang: 'React',
-    avatars: [
-      {
-        src: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC1Dftk2UBjJp63T7-w4FUlBCxwu-KQWMmi2hJWUP5y4W3or-98LtRlsUgZt_xL4_Rhaa-7Ynh_tGLIDdxijoVdTBb9Rf2cExtI1D2PaLWpxUdBlvRRlp8odbwi-zmqu8k1o4nnm-0HHlJZLkNxyebdo8DuAkkescn6qoTLtcLQMv0GLAx1NQ5_7hFq-jclcP-thrd9rzpLm_3rofaKuKvAbwfn4HEve5s9Bq2fRJ0hYVqLtsCn4ocWHrXMwXQU-m_fRcZmoCO1G07n',
-      },
-      {
-        src: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA4_fNSgUGyhRagebBSa-7xAOufXWscSVBiGd-eXqeAoijpdtBs_FTgz__BcGovzx9Bs8bVA4upd_O5ujCjjamvW-eydginv3Gf482Q1TpETsSj15QPwqdBKTbEMkbIIzvDkpBSB5g6K4HKOr7TxVgMAly7udsP6vdMdmRAHmN1Q3oZYPNCqxEA7T0KoAceqAwuvszzz-yi2cKy7zxJIHx7LtVxxZnVAAUaI200Rrm1_cgOJU2m4Lo0KlqoSLMw6e6nVUjpkHfvwXD0',
-      },
-    ],
-  },
-  {
-    icon: 'data_object',
-    tag: 'dev',
-    name: 'api-gateway-v3',
-    activity: 'Active Yesterday',
-    lang: 'Go',
-    avatars: [
-      {
-        src: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDV1Kz4r8VoPofnZNkCtTqBSy98sjs2vN3uI2xdppp3LOU5r9VYcK85uzRXkgCZD7jjfH-mwGKPSaneoZAVSQCAtNPYFexFiQ_O47oImqMdHXWDKpCjXUPIwn2qb-yCUzJl74Szvl1zzVHxqwfI_xsz-1ULQxGmPIfIhNNq6n7HlNib1Cm6J-tP_FfDUdLSp38kcu3VB0was2tjeOdQjiZLX4ywSifOJmZnwpuubUfbowrZH9kHwsbyIUubRVgTP97Gvv1YwtGcEaun',
-      },
-    ],
-  },
-  {
-    icon: 'security',
-    tag: 'audit',
-    name: 'auth-microservice',
-    activity: 'Active 4d ago',
-    lang: 'Rust',
-    avatars: [{ initials: 'JD' }],
-  },
-]
-
-const QUICK_ACTIONS = [
-  {
-    icon: 'add',
-    title: 'New Project',
-    subtitle: 'Initialize repository',
-    iconBg: 'bg-primary/10 text-primary',
-  },
-  {
-    icon: 'person_add',
-    title: 'Invite Team',
-    subtitle: 'Add collaborators',
-    iconBg: 'bg-secondary-container/50 text-secondary',
-  },
-  {
-    icon: 'menu_book',
-    title: 'View Docs',
-    subtitle: 'API reference',
-    iconBg: 'bg-secondary-container/50 text-secondary',
-  },
-]
+import { useAuth } from '../context/AuthContext.jsx'
+import {
+  workspaceAPI,
+  fileAPI,
+  chatAPI,
+  aiAPI,
+  meetingAPI,
+} from '../services/api.js'
+import socketService from '../services/socket.js'
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState('workspaces')
+
+  // Workspaces state
+  const [workspaces, setWorkspaces] = useState([])
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(true)
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null)
+
+  // Modals state
+  const [showCreateWsModal, setShowCreateWsModal] = useState(false)
+  const [newWsName, setNewWsName] = useState('')
+  const [isCreatingWs, setIsCreatingWs] = useState(false)
+
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [isInviting, setIsInviting] = useState(false)
+  const [inviteFeedback, setInviteFeedback] = useState('')
+
+  // Files state
+  const [files, setFiles] = useState([])
+  const [loadingFiles, setLoadingFiles] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [fileContent, setFileContent] = useState('')
+  const [isSavingFile, setIsSavingFile] = useState(false)
+  const [showCreateFileModal, setShowCreateFileModal] = useState(false)
+  const [newFileName, setNewFileName] = useState('')
+  const [isNewFolder, setIsNewFolder] = useState(false)
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [loadingChat, setLoadingChat] = useState(false)
+
+  // AI Assistant state
+  const [aiMode, setAiMode] = useState('chat') // 'chat' | 'explain' | 'debug' | 'generate'
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiCode, setAiCode] = useState('')
+  const [aiErrorInput, setAiErrorInput] = useState('')
+  const [aiResponse, setAiResponse] = useState('')
+  const [isAiLoading, setIsAiLoading] = useState(false)
+
+  // Meetings state
+  const [meetings, setMeetings] = useState([])
+  const [showMeetingModal, setShowMeetingModal] = useState(false)
+  const [meetingTitle, setMeetingTitle] = useState('')
+  const [activeMeeting, setActiveMeeting] = useState(null)
+
+  // Profile Settings state
+  const [profileName, setProfileName] = useState(user?.name || '')
+  const [profileAvatar, setProfileAvatar] = useState(user?.avatarUrl || '')
+  const [profileMsg, setProfileMsg] = useState('')
+  const { updateProfile } = useAuth()
+
+  // Load Workspaces on mount
+  useEffect(() => {
+    loadWorkspaces()
+  }, [])
+
+  const loadWorkspaces = async () => {
+    setLoadingWorkspaces(true)
+    try {
+      const res = await workspaceAPI.list()
+      const list = res.data || []
+      setWorkspaces(list)
+      if (list.length > 0 && !selectedWorkspace) {
+        setSelectedWorkspace(list[0])
+      }
+    } catch (err) {
+      console.error('Error fetching workspaces:', err)
+    } finally {
+      setLoadingWorkspaces(false)
+    }
+  }
+
+  // Load files & chat when selectedWorkspace changes
+  useEffect(() => {
+    if (selectedWorkspace?.id) {
+      loadFiles(selectedWorkspace.id)
+      loadChat(selectedWorkspace.id)
+
+      // Connect Socket for presence & real-time chat
+      if (user?.id) {
+        socketService.joinWorkspace({
+          workspaceId: selectedWorkspace.id,
+          userId: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+        })
+      }
+
+      const handleReceiveMsg = (msg) => {
+        setChatMessages((prev) => [...prev, msg])
+      }
+
+      socketService.onReceiveMessage(handleReceiveMsg)
+
+      return () => {
+        socketService.leaveWorkspace({ workspaceId: selectedWorkspace.id })
+      }
+    }
+  }, [selectedWorkspace?.id, user?.id])
+
+  const loadFiles = async (wsId) => {
+    setLoadingFiles(true)
+    try {
+      const res = await fileAPI.listWorkspaceFiles(wsId)
+      setFiles(res.data || [])
+      setSelectedFile(null)
+      setFileContent('')
+    } catch (err) {
+      console.error('Error loading files:', err)
+    } finally {
+      setLoadingFiles(false)
+    }
+  }
+
+  const loadChat = async (wsId) => {
+    setLoadingChat(true)
+    try {
+      const res = await chatAPI.getMessages(wsId)
+      setChatMessages(res.data || [])
+    } catch (err) {
+      console.error('Error loading chat:', err)
+    } finally {
+      setLoadingChat(false)
+    }
+  }
+
+  // Create Workspace action
+  const handleCreateWorkspace = async (e) => {
+    e.preventDefault()
+    if (!newWsName.trim()) return
+    setIsCreatingWs(true)
+    try {
+      const res = await workspaceAPI.create({ name: newWsName.trim() })
+      const newWs = res.data
+      setWorkspaces((prev) => [newWs, ...prev])
+      setSelectedWorkspace(newWs)
+      setNewWsName('')
+      setShowCreateWsModal(false)
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to create workspace')
+    } finally {
+      setIsCreatingWs(false)
+    }
+  }
+
+  // Invite Member action
+  const handleInviteMember = async (e) => {
+    e.preventDefault()
+    if (!inviteEmail.trim() || !selectedWorkspace) return
+    setIsInviting(true)
+    setInviteFeedback('')
+    try {
+      await workspaceAPI.invite(selectedWorkspace.id, inviteEmail.trim())
+      setInviteFeedback('Member invited successfully!')
+      setInviteEmail('')
+      setTimeout(() => {
+        setShowInviteModal(false)
+        setInviteFeedback('')
+      }, 1500)
+    } catch (err) {
+      setInviteFeedback(
+        err.response?.data?.message || 'Failed to invite member'
+      )
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
+  // File Select & Load Content
+  const handleSelectFile = async (file) => {
+    setSelectedFile(file)
+    if (file.isFolder) return
+    try {
+      const res = await fileAPI.getContent(file.id)
+      setFileContent(res.data?.content || '')
+    } catch (err) {
+      console.error('Error loading file content:', err)
+    }
+  }
+
+  // Save File Content
+  const handleSaveFile = async () => {
+    if (!selectedFile) return
+    setIsSavingFile(true)
+    try {
+      await fileAPI.saveContent(selectedFile.id, fileContent)
+      alert('File saved successfully!')
+    } catch (err) {
+      alert('Failed to save file')
+    } finally {
+      setIsSavingFile(false)
+    }
+  }
+
+  // Create File action
+  const handleCreateFile = async (e) => {
+    e.preventDefault()
+    if (!newFileName.trim() || !selectedWorkspace) return
+    try {
+      const res = await fileAPI.create({
+        workspaceId: selectedWorkspace.id,
+        name: newFileName.trim(),
+        isFolder: isNewFolder,
+      })
+      setFiles((prev) => [...prev, res.data])
+      setNewFileName('')
+      setShowCreateFileModal(false)
+    } catch (err) {
+      alert('Failed to create file')
+    }
+  }
+
+  // Send Chat message
+  const handleSendChat = (e) => {
+    e.preventDefault()
+    if (!chatInput.trim() || !selectedWorkspace || !user) return
+    socketService.sendChatMessage({
+      workspaceId: selectedWorkspace.id,
+      senderId: user.id,
+      text: chatInput.trim(),
+    })
+    setChatInput('')
+  }
+
+  // AI Assistant submit
+  const handleAiSubmit = async (e) => {
+    e.preventDefault()
+    setIsAiLoading(true)
+    setAiResponse('')
+    try {
+      let res
+      if (aiMode === 'chat') {
+        res = await aiAPI.chat(aiPrompt, aiCode)
+      } else if (aiMode === 'explain') {
+        res = await aiAPI.explain(aiCode)
+      } else if (aiMode === 'debug') {
+        res = await aiAPI.debug(aiCode, aiErrorInput)
+      } else if (aiMode === 'generate') {
+        res = await aiAPI.generate(aiPrompt)
+      }
+      setAiResponse(res?.data?.response || 'No response generated.')
+    } catch (err) {
+      setAiResponse('AI processing error. Please try again.')
+    } finally {
+      setIsAiLoading(false)
+    }
+  }
+
+  // Create Meeting
+  const handleCreateMeeting = async (e) => {
+    e.preventDefault()
+    if (!meetingTitle.trim() || !selectedWorkspace) return
+    try {
+      const res = await meetingAPI.create(
+        selectedWorkspace.id,
+        meetingTitle.trim()
+      )
+      setActiveMeeting(res.data)
+      setMeetings((prev) => [res.data, ...prev])
+      setShowMeetingModal(false)
+      setMeetingTitle('')
+    } catch (err) {
+      alert('Failed to create meeting session')
+    }
+  }
+
+  // Update Profile Settings
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault()
+    const result = await updateProfile({
+      name: profileName,
+      avatarUrl: profileAvatar,
+    })
+    if (result.success) {
+      setProfileMsg('Profile updated successfully!')
+    } else {
+      setProfileMsg(result.error || 'Update failed')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background text-on-background selection:bg-primary/20">
       <Navbar />
       <div className="flex min-h-screen pt-16">
-        <Sidebar />
+        <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <main className="flex-1 overflow-y-auto p-margin-page pb-24 lg:ml-[240px] lg:pb-margin-page">
           <div className="mx-auto max-w-container-max space-y-stack-lg">
-            {/* Hero */}
-            <section className="grid grid-cols-1 items-center gap-stack-md md:grid-cols-3">
-              <div className="md:col-span-1">
-                <h2 className="font-headline-lg text-headline-lg text-on-surface">
-                  Good morning, Alex
-                </h2>
-                <p className="mt-1 font-body-lg text-body-lg text-secondary">
-                  Ready to push some high-performance code today?
+            {/* Header / Workspace Selector */}
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant pb-4">
+              <div>
+                <h1 className="font-headline-lg text-headline-lg font-bold text-on-surface">
+                  Welcome back, {user?.name || 'Developer'}
+                </h1>
+                <p className="font-body-md text-secondary">
+                  Active Workspace:{' '}
+                  <span className="font-semibold text-primary">
+                    {selectedWorkspace?.name || 'No workspace selected'}
+                  </span>
                 </p>
               </div>
-              <div className="flex flex-col gap-stack-md sm:flex-row md:col-span-2">
-                <div className="group flex-1 cursor-pointer rounded-xl border border-primary/20 bg-primary-container p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex items-start justify-between">
-                    <div className="rounded-lg bg-surface/20 p-2 text-white">
-                      <span className="material-symbols-outlined">
-                        add_circle
-                      </span>
-                    </div>
-                    <span className="material-symbols-outlined text-white/40 transition-colors group-hover:text-white">
-                      arrow_forward
-                    </span>
-                  </div>
-                  <h3 className="mt-4 font-headline-md text-headline-md font-bold text-white">
-                    Create Workspace
-                  </h3>
-                  <p className="mt-1 font-body-md text-body-md text-white/80">
-                    Launch a new isolated development environment.
-                  </p>
-                </div>
-                <div className="group flex-1 cursor-pointer rounded-xl border border-outline-variant bg-surface-container-lowest p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex items-start justify-between">
-                    <div className="rounded-lg bg-secondary-container p-2 text-primary">
-                      <span className="material-symbols-outlined">
-                        group_add
-                      </span>
-                    </div>
-                    <span className="material-symbols-outlined text-secondary/40 transition-colors group-hover:text-primary">
-                      arrow_forward
-                    </span>
-                  </div>
-                  <h3 className="mt-4 font-headline-md text-headline-md font-bold text-on-surface">
-                    Join Workspace
-                  </h3>
-                  <p className="mt-1 font-body-md text-body-md text-secondary">
-                    Connect to an existing team infrastructure.
-                  </p>
-                </div>
-              </div>
-            </section>
 
-            {/* Recent Workspaces */}
-            <section>
-              <div className="mb-stack-md flex items-center justify-between">
-                <h3 className="font-headline-md text-headline-md text-on-surface">
-                  Recent Workspaces
-                </h3>
-                <button className="font-label-md text-label-md text-primary hover:underline">
-                  View all
+              <div className="flex items-center gap-3">
+                {workspaces.length > 0 && (
+                  <select
+                    value={selectedWorkspace?.id || ''}
+                    onChange={(e) => {
+                      const ws = workspaces.find((w) => w.id === e.target.value)
+                      if (ws) setSelectedWorkspace(ws)
+                    }}
+                    className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                  >
+                    {workspaces.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  onClick={() => setShowCreateWsModal(true)}
+                  className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    add
+                  </span>
+                  <span>New Workspace</span>
                 </button>
               </div>
-              <div className="grid grid-cols-1 gap-stack-md sm:grid-cols-2 xl:grid-cols-4">
-                {WORKSPACES.map((ws) => (
-                  <div
-                    key={ws.name}
-                    className="group rounded-[16px] border border-outline-variant bg-surface-container-lowest p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary"
-                  >
-                    <div className="mb-4 flex items-start justify-between">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-container">
-                        <span className="material-symbols-outlined text-primary">
-                          {ws.icon}
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-bold uppercase text-outline-variant transition-colors group-hover:text-primary">
-                        {ws.tag}
-                      </span>
-                    </div>
-                    <h4 className="font-body-lg text-body-lg font-bold text-on-surface">
-                      {ws.name}
-                    </h4>
-                    <p className="mt-1 flex items-center gap-1 font-label-md text-label-md text-secondary">
-                      <span className="material-symbols-outlined text-[14px]">
-                        schedule
-                      </span>
-                      {ws.activity}
-                    </p>
-                    <div className="mt-6 flex items-center justify-between">
-                      <div className="flex -space-x-2">
-                        {ws.avatars.map((a, i) =>
-                          a.src ? (
-                            <div
-                              key={i}
-                              className="h-6 w-6 overflow-hidden rounded-full border-2 border-white bg-secondary-container"
-                            >
-                              <img
-                                src={a.src}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                          ) : (
-                            <div
-                              key={i}
-                              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-secondary-container text-[8px] font-bold text-primary"
-                            >
-                              {a.initials}
-                            </div>
-                          ),
-                        )}
-                        {ws.extraCount && (
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-tertiary-container text-[8px] text-white">
-                            +{ws.extraCount}
-                          </div>
-                        )}
-                      </div>
-                      <div className="code-font rounded bg-surface-container px-2 py-0.5 text-[10px] font-bold">
-                        {ws.lang}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Two Column Layout & Quick Actions */}
-            <div className="grid grid-cols-1 gap-stack-lg xl:grid-cols-12">
-              {/* Recent Activity */}
-              <div className="space-y-stack-md xl:col-span-6">
-                <h3 className="font-headline-md text-headline-md text-on-surface">
-                  Recent Activity
-                </h3>
-                <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest shadow-sm">
-                  <div className="divide-y divide-outline-variant">
-                    <div className="flex gap-4 p-4 transition-colors hover:bg-surface">
-                      <div className="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-secondary-container text-primary">
-                        <span className="material-symbols-outlined text-sm">
-                          commit
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-body-md text-body-md leading-snug text-on-surface">
-                          <span className="font-bold">Sarah Miller</span>{' '}
-                          pushed 3 commits to{' '}
-                          <span className="code-font text-primary">main</span>
-                        </p>
-                        <div className="code-font mt-2 rounded border border-outline-variant/30 bg-surface-container-low p-2 text-xs text-secondary">
-                          feat(auth): add OIDC support for enterprise clients
-                        </div>
-                        <p className="mt-2 font-label-md text-label-md text-outline">
-                          12 minutes ago
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4 p-4 transition-colors hover:bg-surface">
-                      <div className="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-error-container text-error">
-                        <span
-                          className="material-symbols-outlined text-sm"
-                          style={{ fontVariationSettings: "'FILL' 1" }}
-                        >
-                          error
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-body-md text-body-md leading-snug text-on-surface">
-                          Deployment failed in{' '}
-                          <span className="font-bold">nebula-dashboard</span>
-                        </p>
-                        <p className="mt-1 font-body-md text-body-md text-secondary">
-                          CI/CD Pipeline #4492: Connection timeout in staging
-                          env.
-                        </p>
-                        <p className="mt-2 font-label-md text-label-md text-outline">
-                          1 hour ago
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4 p-4 transition-colors hover:bg-surface">
-                      <div className="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-tertiary-container/10 text-tertiary">
-                        <span className="material-symbols-outlined text-sm">
-                          comment
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-body-md text-body-md leading-snug text-on-surface">
-                          <span className="font-bold">James Wilson</span>{' '}
-                          commented on PR{' '}
-                          <span className="font-bold text-primary">#102</span>
-                        </p>
-                        <p className="mt-1 font-body-md text-body-md italic text-secondary">
-                          &quot;Looks good, but we should double check the
-                          memory allocation here.&quot;
-                        </p>
-                        <p className="mt-2 font-label-md text-label-md text-outline">
-                          3 hours ago
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <button className="w-full border-t border-outline-variant py-3 text-center font-label-md text-label-md text-secondary transition-colors hover:bg-surface">
-                    Load more activity
-                  </button>
-                </div>
-              </div>
-
-              {/* Meetings */}
-              <div className="space-y-stack-md xl:col-span-3">
-                <h3 className="font-headline-md text-headline-md text-on-surface">
-                  Meetings
-                </h3>
-                <div className="space-y-stack-sm">
-                  <div className="flex flex-col gap-3 rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
-                    <div className="flex items-start justify-between">
-                      <div className="rounded-lg bg-primary/5 p-2 text-primary">
-                        <span className="material-symbols-outlined">
-                          video_camera_front
-                        </span>
-                      </div>
-                      <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-                        Now
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="font-body-lg text-body-lg font-bold">
-                        Architecture Review
-                      </h4>
-                      <p className="font-label-md text-label-md text-secondary">
-                        Cloud Team Sync
-                      </p>
-                    </div>
-                    <button className="w-full rounded-lg bg-primary py-2 font-label-md text-label-md text-white transition-colors hover:bg-primary/90">
-                      Join Meeting
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
-                    <div>
-                      <p className="font-label-md text-label-md text-secondary">
-                        2:30 PM — 3:00 PM
-                      </p>
-                      <h4 className="font-body-md text-body-md font-bold">
-                        Weekly Standup
-                      </h4>
-                    </div>
-                    <button className="rounded-lg p-2 text-primary transition-colors hover:bg-surface-container">
-                      <span className="material-symbols-outlined">link</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl border border-outline-variant bg-surface-container-lowest p-4 opacity-60 shadow-sm">
-                    <div>
-                      <p className="font-label-md text-label-md text-secondary">
-                        4:00 PM
-                      </p>
-                      <h4 className="font-body-md text-body-md font-bold">
-                        Client Demo
-                      </h4>
-                    </div>
-                    <button className="rounded-lg p-2 text-secondary transition-colors hover:bg-surface-container">
-                      <span className="material-symbols-outlined">link</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="space-y-stack-md xl:col-span-3">
-                <h3 className="font-headline-md text-headline-md text-on-surface">
-                  Quick Actions
-                </h3>
-                <div className="grid grid-cols-1 gap-stack-sm">
-                  {QUICK_ACTIONS.map((action) => (
-                    <button
-                      key={action.title}
-                      className="group flex items-center gap-stack-sm rounded-xl border border-outline-variant bg-surface-container-lowest p-4 text-left transition-all hover:border-primary hover:bg-primary/5"
-                    >
-                      <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-full transition-all group-hover:bg-primary group-hover:text-white ${action.iconBg}`}
-                      >
-                        <span className="material-symbols-outlined">
-                          {action.icon}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block font-body-md text-body-md font-bold">
-                          {action.title}
-                        </span>
-                        <span className="block font-label-md text-label-md text-secondary">
-                          {action.subtitle}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-
-                  <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-outline-variant bg-surface-container p-5 text-center">
-                    <div className="animate-spin-slow mb-4 h-16 w-16 rounded-full border-4 border-primary border-t-transparent" />
-                    <p className="font-body-md text-body-md font-bold">
-                      Cloud Usage
-                    </p>
-                    <p className="font-label-md text-label-md text-secondary">
-                      82% of quota reached
-                    </p>
-                    <button className="mt-4 text-[10px] font-bold uppercase tracking-wider text-primary">
-                      Upgrade Plan
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
+
+            {/* TAB CONTENT 1: WORKSPACES */}
+            {activeTab === 'workspaces' && (
+              <div className="space-y-stack-lg">
+                {/* Action Cards */}
+                <div className="grid grid-cols-1 gap-stack-md sm:grid-cols-2 lg:grid-cols-3">
+                  <div
+                    onClick={() => setShowCreateWsModal(true)}
+                    className="group flex cursor-pointer flex-col justify-between rounded-2xl border border-primary/20 bg-primary-container p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="rounded-xl bg-surface/20 p-3 text-white">
+                        <span className="material-symbols-outlined text-2xl">
+                          add_circle
+                        </span>
+                      </div>
+                      <span className="material-symbols-outlined text-white/40 transition-colors group-hover:text-white">
+                        arrow_forward
+                      </span>
+                    </div>
+                    <div className="mt-6">
+                      <h3 className="font-headline-md text-headline-md font-bold text-white">
+                        Create Workspace
+                      </h3>
+                      <p className="mt-1 font-body-md text-white/80">
+                        Launch a new team environment with full database sync.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setShowInviteModal(true)}
+                    className="group flex cursor-pointer flex-col justify-between rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="rounded-xl bg-secondary-container p-3 text-primary">
+                        <span className="material-symbols-outlined text-2xl">
+                          group_add
+                        </span>
+                      </div>
+                      <span className="material-symbols-outlined text-secondary/40 transition-colors group-hover:text-primary">
+                        arrow_forward
+                      </span>
+                    </div>
+                    <div className="mt-6">
+                      <h3 className="font-headline-md text-headline-md font-bold text-on-surface">
+                        Invite Collaborators
+                      </h3>
+                      <p className="mt-1 font-body-md text-secondary">
+                        Add teammates to active workspace via email invite.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setShowMeetingModal(true)}
+                    className="group flex cursor-pointer flex-col justify-between rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-md sm:col-span-2 lg:col-span-1"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="rounded-xl bg-tertiary-container/30 p-3 text-tertiary">
+                        <span className="material-symbols-outlined text-2xl">
+                          video_call
+                        </span>
+                      </div>
+                      <span className="material-symbols-outlined text-secondary/40 transition-colors group-hover:text-tertiary">
+                        arrow_forward
+                      </span>
+                    </div>
+                    <div className="mt-6">
+                      <h3 className="font-headline-md text-headline-md font-bold text-on-surface">
+                        Start Video Meeting
+                      </h3>
+                      <p className="mt-1 font-body-md text-secondary">
+                        Create real-time WebRTC session for code review.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Workspaces Grid */}
+                <div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="font-headline-md text-headline-md font-bold text-on-surface">
+                      Your Workspaces ({workspaces.length})
+                    </h2>
+                  </div>
+
+                  {loadingWorkspaces ? (
+                    <div className="flex py-12 justify-center">
+                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                    </div>
+                  ) : workspaces.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-12 text-center">
+                      <span className="material-symbols-outlined text-4xl text-outline">
+                        folder_open
+                      </span>
+                      <h3 className="mt-2 font-headline-sm text-lg font-bold">
+                        No Workspaces Found
+                      </h3>
+                      <p className="mt-1 text-sm text-secondary">
+                        Create your first workspace to start collaborating.
+                      </p>
+                      <button
+                        onClick={() => setShowCreateWsModal(true)}
+                        className="mt-4 rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white"
+                      >
+                        Create Workspace
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-stack-md sm:grid-cols-2 lg:grid-cols-3">
+                      {workspaces.map((ws) => (
+                        <div
+                          key={ws.id}
+                          onClick={() => setSelectedWorkspace(ws)}
+                          className={`cursor-pointer rounded-2xl border p-5 transition-all hover:shadow-md ${
+                            selectedWorkspace?.id === ws.id
+                              ? 'border-primary bg-primary/5 shadow-sm'
+                              : 'border-outline-variant bg-surface-container-lowest hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="mb-4 flex items-start justify-between">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container text-primary">
+                              <span className="material-symbols-outlined">
+                                terminal
+                              </span>
+                            </div>
+                            {selectedWorkspace?.id === ws.id && (
+                              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-headline-sm text-lg font-bold text-on-surface">
+                            {ws.name}
+                          </h3>
+                          <p className="mt-1 text-xs text-secondary">
+                            Created:{' '}
+                            {new Date(ws.createdAt).toLocaleDateString()}
+                          </p>
+                          <div className="mt-4 flex items-center justify-between border-t border-outline-variant/40 pt-3">
+                            <span className="text-xs text-outline">
+                              {ws.members?.length || 1} Member(s)
+                            </span>
+                            <span className="material-symbols-outlined text-sm text-primary">
+                              arrow_forward
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT 2: FILES */}
+            {activeTab === 'files' && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                {/* File List / Explorer */}
+                <div className="lg:col-span-4 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="font-headline-sm font-bold text-on-surface">
+                      Explorer
+                    </h3>
+                    <button
+                      onClick={() => setShowCreateFileModal(true)}
+                      className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1 font-label-md text-xs font-bold text-primary hover:bg-primary/20"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        add
+                      </span>
+                      <span>New File</span>
+                    </button>
+                  </div>
+
+                  {loadingFiles ? (
+                    <div className="py-8 text-center text-xs text-secondary">
+                      Loading files...
+                    </div>
+                  ) : files.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-secondary">
+                      No files in this workspace yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {files.map((file) => (
+                        <div
+                          key={file.id}
+                          onClick={() => handleSelectFile(file)}
+                          className={`flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-sm transition-all ${
+                            selectedFile?.id === file.id
+                              ? 'bg-primary/10 text-primary font-bold'
+                              : 'hover:bg-surface-container-high text-on-surface'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-sm text-secondary">
+                              {file.isFolder ? 'folder' : 'description'}
+                            </span>
+                            <span>{file.name}</span>
+                          </div>
+                          {!file.isFolder && (
+                            <span className="text-[10px] text-outline">
+                              Code
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Editor View */}
+                <div className="lg:col-span-8 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm flex flex-col min-h-[450px]">
+                  {selectedFile ? (
+                    <>
+                      <div className="mb-3 flex items-center justify-between border-b border-outline-variant pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary">
+                            {selectedFile.isFolder ? 'folder' : 'code'}
+                          </span>
+                          <h4 className="font-headline-sm font-bold">
+                            {selectedFile.name}
+                          </h4>
+                        </div>
+                        {!selectedFile.isFolder && (
+                          <button
+                            onClick={handleSaveFile}
+                            disabled={isSavingFile}
+                            className="flex items-center gap-1 rounded-xl bg-primary px-4 py-1.5 font-label-md text-xs font-bold text-white shadow-sm transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              save
+                            </span>
+                            <span>{isSavingFile ? 'Saving...' : 'Save'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {selectedFile.isFolder ? (
+                        <div className="flex flex-1 items-center justify-center text-sm text-secondary">
+                          This is a folder. Select a code file to view/edit content.
+                        </div>
+                      ) : (
+                        <textarea
+                          value={fileContent}
+                          onChange={(e) => setFileContent(e.target.value)}
+                          placeholder="Type code here..."
+                          className="flex-1 w-full font-mono text-sm bg-surface-container-low p-4 rounded-xl border border-outline-variant outline-none focus:ring-2 focus:ring-primary/20 resize-none min-h-[350px]"
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-secondary">
+                      <span className="material-symbols-outlined text-4xl text-outline mb-2">
+                        code_off
+                      </span>
+                      <p className="font-body-md">
+                        Select a file from the explorer to view or edit code.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT 3: CHAT */}
+            {activeTab === 'chat' && (
+              <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-sm flex flex-col h-[550px]">
+                <div className="mb-4 border-b border-outline-variant pb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-headline-sm font-bold text-on-surface">
+                      Team Live Chat
+                    </h3>
+                    <p className="text-xs text-secondary">
+                      Workspace: {selectedWorkspace?.name}
+                    </p>
+                  </div>
+                  <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Socket.IO Connected
+                  </span>
+                </div>
+
+                {/* Messages Container */}
+                <div className="flex-1 overflow-y-auto space-y-3 p-3 bg-surface-container-low rounded-xl mb-4">
+                  {loadingChat ? (
+                    <p className="text-center text-xs text-secondary py-4">
+                      Loading messages...
+                    </p>
+                  ) : chatMessages.length === 0 ? (
+                    <p className="text-center text-xs text-secondary py-8">
+                      No messages yet. Send the first message to your team!
+                    </p>
+                  ) : (
+                    chatMessages.map((msg, i) => {
+                      const isMe = msg.senderId === user?.id
+                      return (
+                        <div
+                          key={msg.id || i}
+                          className={`flex flex-col ${
+                            isMe ? 'items-end' : 'items-start'
+                          }`}
+                        >
+                          <span className="text-[10px] text-secondary mb-0.5 px-1">
+                            {msg.sender?.name || 'Teammate'}
+                          </span>
+                          <div
+                            className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                              isMe
+                                ? 'bg-primary text-white rounded-br-none'
+                                : 'bg-surface-container-lowest border border-outline-variant text-on-surface rounded-bl-none'
+                            }`}
+                          >
+                            {msg.text}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+
+                {/* Chat Input */}
+                <form onSubmit={handleSendChat} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1 rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button
+                    type="submit"
+                    className="flex items-center gap-1 rounded-xl bg-primary px-5 py-3 font-label-md font-bold text-white shadow-sm hover:bg-primary/90 active:scale-95"
+                  >
+                    <span>Send</span>
+                    <span className="material-symbols-outlined text-sm">
+                      send
+                    </span>
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* TAB CONTENT 4: AI ASSISTANT */}
+            {activeTab === 'ai' && (
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                {/* AI Controls */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-5 shadow-sm">
+                    <h3 className="font-headline-sm font-bold text-on-surface mb-3">
+                      AI Capabilities
+                    </h3>
+
+                    <div className="flex gap-2 mb-4">
+                      {['chat', 'explain', 'debug', 'generate'].map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setAiMode(mode)}
+                          className={`flex-1 rounded-xl py-2 text-xs font-bold capitalize transition-all ${
+                            aiMode === mode
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-surface-container-low text-secondary hover:bg-surface-container-high'
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+
+                    <form onSubmit={handleAiSubmit} className="space-y-3">
+                      {(aiMode === 'chat' || aiMode === 'generate') && (
+                        <div>
+                          <label className="block text-xs font-semibold text-secondary mb-1">
+                            Prompt
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={aiPrompt}
+                            onChange={(e) => setAiPrompt(e.target.value)}
+                            placeholder={
+                              aiMode === 'generate'
+                                ? 'Describe what code you want to generate...'
+                                : 'Ask AI anything about your project...'
+                            }
+                            className="w-full rounded-xl border border-outline-variant bg-surface-container-low p-3 font-body-md text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                            required
+                          />
+                        </div>
+                      )}
+
+                      {(aiMode === 'chat' || aiMode === 'explain' || aiMode === 'debug') && (
+                        <div>
+                          <label className="block text-xs font-semibold text-secondary mb-1">
+                            Code Snippet
+                          </label>
+                          <textarea
+                            rows={4}
+                            value={aiCode}
+                            onChange={(e) => setAiCode(e.target.value)}
+                            placeholder="Paste your code snippet here..."
+                            className="w-full rounded-xl border border-outline-variant bg-surface-container-low p-3 font-mono text-xs outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+                      )}
+
+                      {aiMode === 'debug' && (
+                        <div>
+                          <label className="block text-xs font-semibold text-secondary mb-1">
+                            Error Log / Message
+                          </label>
+                          <input
+                            type="text"
+                            value={aiErrorInput}
+                            onChange={(e) => setAiErrorInput(e.target.value)}
+                            placeholder="e.g. TypeError: Cannot read property of null"
+                            className="w-full rounded-xl border border-outline-variant bg-surface-container-low p-3 text-xs outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={isAiLoading}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 font-label-md text-sm font-bold text-white shadow-sm transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-50"
+                      >
+                        {isAiLoading ? (
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-sm">
+                              auto_awesome
+                            </span>
+                            <span>Run AI Action</span>
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+                {/* AI Response Output */}
+                <div className="lg:col-span-7 rounded-2xl border border-outline-variant bg-surface-container-lowest p-5 shadow-sm flex flex-col">
+                  <h3 className="font-headline-sm font-bold text-on-surface mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">
+                      smart_toy
+                    </span>
+                    <span>AI Analysis & Output</span>
+                  </h3>
+
+                  <div className="flex-1 bg-surface-container-low rounded-xl p-4 font-mono text-sm overflow-y-auto whitespace-pre-wrap min-h-[300px]">
+                    {isAiLoading ? (
+                      <div className="flex h-full items-center justify-center text-secondary">
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                          <span>Generating AI response...</span>
+                        </div>
+                      </div>
+                    ) : aiResponse ? (
+                      aiResponse
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-outline text-xs text-center">
+                        Select an AI capability on the left and submit your query.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT 5: SETTINGS */}
+            {activeTab === 'settings' && (
+              <div className="max-w-2xl rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-sm">
+                <h3 className="font-headline-md font-bold text-on-surface mb-4">
+                  Account Settings
+                </h3>
+
+                {profileMsg && (
+                  <div className="mb-4 rounded-xl bg-primary/10 p-3 text-xs font-semibold text-primary">
+                    {profileMsg}
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-secondary mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2.5 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-secondary mb-1">
+                      Avatar Image URL
+                    </label>
+                    <input
+                      type="url"
+                      value={profileAvatar}
+                      onChange={(e) => setProfileAvatar(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2.5 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-primary px-6 py-2.5 font-label-md font-bold text-white shadow-sm hover:bg-primary/90 active:scale-95"
+                  >
+                    Save Settings
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </main>
       </div>
+
+      {/* CREATE WORKSPACE MODAL */}
+      {showCreateWsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface p-6 shadow-2xl">
+            <h3 className="font-headline-md font-bold text-on-surface mb-2">
+              Create New Workspace
+            </h3>
+            <p className="text-xs text-secondary mb-4">
+              Enter a title for your collaborative environment.
+            </p>
+            <form onSubmit={handleCreateWorkspace} className="space-y-4">
+              <input
+                type="text"
+                value={newWsName}
+                onChange={(e) => setNewWsName(e.target.value)}
+                placeholder="e.g. quantum-engine"
+                className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                required
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateWsModal(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-secondary hover:bg-surface-container-high"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingWs}
+                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isCreatingWs ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* INVITE MEMBER MODAL */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface p-6 shadow-2xl">
+            <h3 className="font-headline-md font-bold text-on-surface mb-2">
+              Invite Collaborator
+            </h3>
+            <p className="text-xs text-secondary mb-4">
+              Invite teammates to workspace:{' '}
+              <span className="font-semibold text-primary">
+                {selectedWorkspace?.name}
+              </span>
+            </p>
+
+            {inviteFeedback && (
+              <div className="mb-4 rounded-xl bg-primary/10 p-3 text-xs font-semibold text-primary">
+                {inviteFeedback}
+              </div>
+            )}
+
+            <form onSubmit={handleInviteMember} className="space-y-4">
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="teammate@company.com"
+                className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                required
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-secondary hover:bg-surface-container-high"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isInviting}
+                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isInviting ? 'Inviting...' : 'Send Invite'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE FILE MODAL */}
+      {showCreateFileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface p-6 shadow-2xl">
+            <h3 className="font-headline-md font-bold text-on-surface mb-2">
+              Create New File or Folder
+            </h3>
+            <form onSubmit={handleCreateFile} className="space-y-4">
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder="e.g. index.ts or src"
+                className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                required
+                autoFocus
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isFolderCheckbox"
+                  checked={isNewFolder}
+                  onChange={(e) => setIsNewFolder(e.target.checked)}
+                  className="rounded border-outline-variant text-primary focus:ring-primary"
+                />
+                <label
+                  htmlFor="isFolderCheckbox"
+                  className="text-xs font-semibold text-secondary"
+                >
+                  Is Folder
+                </label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateFileModal(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-secondary hover:bg-surface-container-high"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary/90"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MEETING MODAL */}
+      {showMeetingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface p-6 shadow-2xl">
+            <h3 className="font-headline-md font-bold text-on-surface mb-2">
+              Start Video Call Session
+            </h3>
+            <form onSubmit={handleCreateMeeting} className="space-y-4">
+              <input
+                type="text"
+                value={meetingTitle}
+                onChange={(e) => setMeetingTitle(e.target.value)}
+                placeholder="e.g. Sprint Architecture Review"
+                className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                required
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMeetingModal(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-secondary hover:bg-surface-container-high"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary/90"
+                >
+                  Launch Call
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   )
