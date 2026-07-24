@@ -51,7 +51,7 @@ JWT_SECRET="your-secret-key"
 FRONTEND_URL="http://localhost:5173"
 
 
-See [`backend/INTEGRATION_GUIDE.md`](backend/INTEGRATION_GUIDE.md) for the full REST API and Socket.IO event reference.
+
 
 ### Frontend
 
