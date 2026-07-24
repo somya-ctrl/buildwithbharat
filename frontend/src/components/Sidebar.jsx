@@ -3,6 +3,7 @@ const NAV_ITEMS = [
   { id: 'files', label: 'Files', icon: 'folder_open' },
   { id: 'chat', label: 'Chat', icon: 'chat_bubble' },
   { id: 'ai', label: 'AI Assistant', icon: 'smart_toy' },
+  { id: 'friends', label: 'Friends', icon: 'people' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ]
 

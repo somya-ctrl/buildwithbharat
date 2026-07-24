@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import AuthSidePanel from '../components/AuthSidePanel.jsx'
 import { GoogleIcon, GithubIcon } from '../components/icons.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Signup() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { signup, loading, error, clearError } = useAuth()
 
   const [name, setName] = useState('')
@@ -36,7 +37,7 @@ export default function Signup() {
 
     const result = await signup(name, email, password)
     if (result.success) {
-      navigate('/dashboard')
+      navigate(location.state?.redirectTo || '/dashboard')
     }
   }
 
@@ -188,7 +189,7 @@ export default function Signup() {
           {/* Footer Link */}
           <p className="pt-2 text-center font-body-md text-body-md text-secondary">
             Already have an account?{' '}
-            <Link className="font-bold text-primary hover:underline" to="/login">
+            <Link className="font-bold text-primary hover:underline" to="/login" state={location.state}>
               Log in
             </Link>
           </p>

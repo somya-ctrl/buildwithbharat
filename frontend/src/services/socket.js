@@ -19,8 +19,12 @@ class SocketService {
         console.log('Socket.IO connected:', this.socket.id)
       })
 
-      this.socket.on('disconnect', () => {
-        console.log('Socket.IO disconnected')
+      this.socket.on('disconnect', (reason) => {
+        console.log('Socket.IO disconnected:', reason)
+      })
+
+      this.socket.on('connect_error', (err) => {
+        console.error('Socket.IO connect_error:', err.message)
       })
     }
     return this.socket
@@ -30,6 +34,32 @@ class SocketService {
     if (this.socket) {
       this.socket.disconnect()
       this.socket = null
+    }
+  }
+
+  isConnected() {
+    return !!this.socket?.connected
+  }
+
+  onConnect(callback) {
+    this.connect()
+    this.socket.on('connect', callback)
+  }
+
+  offConnect(callback) {
+    if (this.socket) {
+      this.socket.off('connect', callback)
+    }
+  }
+
+  onDisconnect(callback) {
+    this.connect()
+    this.socket.on('disconnect', callback)
+  }
+
+  offDisconnect(callback) {
+    if (this.socket) {
+      this.socket.off('disconnect', callback)
     }
   }
 
@@ -81,6 +111,12 @@ class SocketService {
     }
   }
 
+  offReceiveMessage(callback) {
+    if (this.socket) {
+      this.socket.off('chat:receive', callback)
+    }
+  }
+
   onChatTyping(callback) {
     if (this.socket) {
       this.socket.on('chat:typing', callback)
@@ -93,6 +129,12 @@ class SocketService {
     this.socket.emit('editor:join', payload)
   }
 
+  leaveEditor(payload) {
+    if (this.socket) {
+      this.socket.emit('editor:leave', payload)
+    }
+  }
+
   sendEditorUpdate(payload) {
     if (this.socket) {
       this.socket.emit('editor:update', payload)
@@ -102,6 +144,36 @@ class SocketService {
   onEditorUpdate(callback) {
     if (this.socket) {
       this.socket.on('editor:update', callback)
+    }
+  }
+
+  offEditorUpdate(callback) {
+    if (this.socket) {
+      this.socket.off('editor:update', callback)
+    }
+  }
+
+  onEditorUserJoined(callback) {
+    if (this.socket) {
+      this.socket.on('editor:user-joined', callback)
+    }
+  }
+
+  onEditorUserLeft(callback) {
+    if (this.socket) {
+      this.socket.on('editor:user-left', callback)
+    }
+  }
+
+  offEditorUserJoined(callback) {
+    if (this.socket) {
+      this.socket.off('editor:user-joined', callback)
+    }
+  }
+
+  offEditorUserLeft(callback) {
+    if (this.socket) {
+      this.socket.off('editor:user-left', callback)
     }
   }
 

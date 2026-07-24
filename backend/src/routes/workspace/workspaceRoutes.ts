@@ -1,9 +1,33 @@
 import { Router, Response } from 'express';
+import crypto from 'crypto';
 import prisma from '../../lib/prisma';
 import { protect, AuthenticatedRequest } from '../../middleware/authMiddleware';
 import { MemberRole } from '@prisma/client';
 
 const router = Router();
+
+// Unambiguous charset (no 0/O, 1/I/l) so codes are easy to read/type aloud.
+const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+const generateInviteCode = (length = 8): string => {
+  let code = '';
+  for (let i = 0; i < length; i++) {
+    code += INVITE_CODE_CHARS[crypto.randomInt(INVITE_CODE_CHARS.length)];
+  }
+  return code;
+};
+
+// Retries on the rare chance of a collision with an existing code.
+const generateUniqueInviteCode = async (): Promise<string> => {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = generateInviteCode();
+    const existing = await prisma.workspace.findFirst({
+      where: { inviteCode: { equals: code, mode: 'insensitive' } },
+    });
+    if (!existing) return code;
+  }
+  throw new Error('Failed to generate a unique invite code, please try again.');
+};
 
 // @route   POST /api/workspaces
 // @desc    Create a workspace
@@ -17,12 +41,15 @@ router.post('/', protect, async (req: AuthenticatedRequest, res: Response): Prom
   }
 
   try {
+    const inviteCode = await generateUniqueInviteCode();
+
     const workspace = await prisma.$transaction(async (tx) => {
       // 1. Create Workspace
       const ws = await tx.workspace.create({
         data: {
           name,
           ownerId: userId,
+          inviteCode,
         },
       });
 
@@ -46,6 +73,55 @@ router.post('/', protect, async (req: AuthenticatedRequest, res: Response): Prom
       });
 
       return ws;
+    });
+
+    res.status(201).json(workspace);
+  } catch (error: any) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/workspaces/join
+// @desc    Join a workspace using an invite code
+router.post('/join', protect, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { code } = req.body;
+  const userId = req.user?.id;
+
+  if (!code || typeof code !== 'string') {
+    res.status(400).json({ message: 'Invite code is required' });
+    return;
+  }
+
+  try {
+    const workspace = await prisma.workspace.findFirst({
+      where: { inviteCode: { equals: code.trim(), mode: 'insensitive' } },
+    });
+
+    if (!workspace) {
+      res.status(404).json({ message: 'Invalid or expired invite code' });
+      return;
+    }
+
+    const existingMember = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: workspace.id,
+          userId: userId!,
+        },
+      },
+    });
+
+    if (existingMember) {
+      res.json(workspace);
+      return;
+    }
+
+    await prisma.workspaceMember.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: userId!,
+        role: MemberRole.MEMBER,
+      },
     });
 
     res.status(201).json(workspace);
@@ -302,6 +378,39 @@ router.post('/:id/invite', protect, async (req: AuthenticatedRequest, res: Respo
     });
 
     res.status(201).json(newMember);
+  } catch (error: any) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/workspaces/:id/invite-code/regenerate
+// @desc    Regenerate the workspace's invite code (invalidates the old link)
+router.post('/:id/invite-code/regenerate', protect, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const userId = req.user?.id;
+
+  try {
+    const member = await prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId: id,
+          userId: userId!,
+        },
+      },
+    });
+
+    if (!member || (member.role !== MemberRole.OWNER && member.role !== MemberRole.ADMIN)) {
+      res.status(403).json({ message: 'Only owners or admins can regenerate the invite code' });
+      return;
+    }
+
+    const inviteCode = await generateUniqueInviteCode();
+    const updated = await prisma.workspace.update({
+      where: { id },
+      data: { inviteCode },
+    });
+
+    res.json(updated);
   } catch (error: any) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

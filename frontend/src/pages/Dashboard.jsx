@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import Navbar from '../components/Navbar.jsx'
 import Sidebar from '../components/Sidebar.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import MonacoEditor from '../components/MonacoEditor.jsx'
 import {
   workspaceAPI,
   fileAPI,
@@ -14,6 +16,7 @@ import socketService from '../services/socket.js'
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState('workspaces')
 
   // Workspaces state
@@ -26,10 +29,16 @@ export default function Dashboard() {
   const [newWsName, setNewWsName] = useState('')
   const [isCreatingWs, setIsCreatingWs] = useState(false)
 
+  const [showJoinWsModal, setShowJoinWsModal] = useState(false)
+  const [joinCodeInput, setJoinCodeInput] = useState('')
+  const [isJoiningWs, setIsJoiningWs] = useState(false)
+  const [joinWsError, setJoinWsError] = useState('')
+
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [isInviting, setIsInviting] = useState(false)
   const [inviteFeedback, setInviteFeedback] = useState('')
+  const [copyLinkFeedback, setCopyLinkFeedback] = useState('')
 
   // Files state
   const [files, setFiles] = useState([])
@@ -66,19 +75,37 @@ export default function Dashboard() {
   const [profileMsg, setProfileMsg] = useState('')
   const { updateProfile } = useAuth()
 
+  // Real socket connection status (was previously a hardcoded "Connected" badge)
+  const [socketConnected, setSocketConnected] = useState(false)
+
   // Load Workspaces on mount
   useEffect(() => {
-    loadWorkspaces()
+    loadWorkspaces(location.state?.selectWorkspaceId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const loadWorkspaces = async () => {
+  // Track live Socket.IO connection state
+  useEffect(() => {
+    const handleConnect = () => setSocketConnected(true)
+    const handleDisconnect = () => setSocketConnected(false)
+    socketService.onConnect(handleConnect)
+    socketService.onDisconnect(handleDisconnect)
+    setSocketConnected(socketService.isConnected())
+    return () => {
+      socketService.offConnect(handleConnect)
+      socketService.offDisconnect(handleDisconnect)
+    }
+  }, [])
+
+  const loadWorkspaces = async (preferredWorkspaceId) => {
     setLoadingWorkspaces(true)
     try {
       const res = await workspaceAPI.list()
       const list = res.data || []
       setWorkspaces(list)
       if (list.length > 0 && !selectedWorkspace) {
-        setSelectedWorkspace(list[0])
+        const preferred = preferredWorkspaceId && list.find((w) => w.id === preferredWorkspaceId)
+        setSelectedWorkspace(preferred || list[0])
       }
     } catch (err) {
       console.warn('API workspace listing failed, using empty list for UI testing:', err)
@@ -94,7 +121,8 @@ export default function Dashboard() {
       loadChat(selectedWorkspace.id)
 
       // Connect Socket for presence & real-time chat
-      if (user?.id) {
+      const joinRoom = () => {
+        if (!user?.id) return
         try {
           socketService.joinWorkspace({
             workspaceId: selectedWorkspace.id,
@@ -107,6 +135,12 @@ export default function Dashboard() {
         }
       }
 
+      joinRoom()
+      // Re-join the room whenever the socket (re)connects — otherwise a dropped
+      // connection (server restart, network blip) silently falls out of the
+      // workspace room and stops receiving broadcasts until a manual refresh.
+      socketService.onConnect(joinRoom)
+
       const handleReceiveMsg = (msg) => {
         setChatMessages((prev) => [...prev, msg])
       }
@@ -114,6 +148,8 @@ export default function Dashboard() {
       socketService.onReceiveMessage(handleReceiveMsg)
 
       return () => {
+        socketService.offConnect(joinRoom)
+        socketService.offReceiveMessage(handleReceiveMsg)
         try {
           socketService.leaveWorkspace({ workspaceId: selectedWorkspace.id })
         } catch (e) {}
@@ -184,6 +220,30 @@ export default function Dashboard() {
     }
   }
 
+  // Join Workspace via invite code
+  const handleJoinByCode = async (e) => {
+    e.preventDefault()
+    if (!joinCodeInput.trim()) return
+    setIsJoiningWs(true)
+    setJoinWsError('')
+    try {
+      const res = await workspaceAPI.joinByCode(joinCodeInput.trim())
+      const joinedWs = res.data
+      setWorkspaces((prev) =>
+        prev.some((w) => w.id === joinedWs.id) ? prev : [joinedWs, ...prev]
+      )
+      setSelectedWorkspace(joinedWs)
+      setJoinCodeInput('')
+      setShowJoinWsModal(false)
+    } catch (err) {
+      setJoinWsError(
+        err.response?.data?.message || 'Invalid or expired invite code.'
+      )
+    } finally {
+      setIsJoiningWs(false)
+    }
+  }
+
   // Invite Member action
   const handleInviteMember = async (e) => {
     e.preventDefault()
@@ -208,6 +268,20 @@ export default function Dashboard() {
       }, 1500)
     } finally {
       setIsInviting(false)
+    }
+  }
+
+  // Copy invite link to clipboard
+  const handleCopyInviteLink = async () => {
+    if (!selectedWorkspace?.inviteCode) return
+    const link = `${window.location.origin}/join/${selectedWorkspace.inviteCode}`
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopyLinkFeedback('Copied!')
+    } catch (err) {
+      setCopyLinkFeedback('Copy failed, select and copy manually')
+    } finally {
+      setTimeout(() => setCopyLinkFeedback(''), 2000)
     }
   }
 
@@ -354,53 +428,63 @@ export default function Dashboard() {
         <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <main className="flex-1 overflow-y-auto p-margin-page pb-24 lg:ml-[240px] lg:pb-margin-page">
           <div className="mx-auto max-w-container-max space-y-stack-lg">
-            {/* Header / Workspace Selector */}
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant pb-4">
-              <div>
-                <h1 className="font-headline-lg text-headline-lg font-bold text-on-surface">
-                  Welcome back, {user?.name || 'pihu'}
-                </h1>
-                <p className="font-body-md text-secondary">
-                  Active Workspace:{' '}
-                  <span className="font-semibold text-primary">
-                    {selectedWorkspace?.name || 'No workspace selected'}
-                  </span>
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {workspaces.length > 0 && (
-                  <select
-                    value={selectedWorkspace?.id || ''}
-                    onChange={(e) => {
-                      const ws = workspaces.find((w) => w.id === e.target.value)
-                      if (ws) setSelectedWorkspace(ws)
-                    }}
-                    className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    {workspaces.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                <button
-                  onClick={() => setShowCreateWsModal(true)}
-                  className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white shadow-sm transition-all hover:bg-primary/90 active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-sm">
-                    add
-                  </span>
-                  <span>New Workspace</span>
-                </button>
-              </div>
-            </div>
-
             {/* TAB CONTENT 1: WORKSPACES */}
             {activeTab === 'workspaces' && (
               <div className="space-y-stack-lg">
+                {/* Header / Workspace Selector */}
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant pb-4">
+                  <div>
+                    <h1 className="font-headline-lg text-headline-lg font-bold text-on-surface">
+                      Welcome back, {user?.name || 'pihu'}
+                    </h1>
+                    <p className="font-body-md text-secondary">
+                      Active Workspace:{' '}
+                      <span className="font-semibold text-primary">
+                        {selectedWorkspace?.name || 'No workspace selected'}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {workspaces.length > 0 && (
+                      <select
+                        value={selectedWorkspace?.id || ''}
+                        onChange={(e) => {
+                          const ws = workspaces.find((w) => w.id === e.target.value)
+                          if (ws) setSelectedWorkspace(ws)
+                        }}
+                        className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-2 font-body-md outline-none focus:ring-2 focus:ring-primary/20"
+                      >
+                        {workspaces.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    <button
+                      onClick={() => setShowJoinWsModal(true)}
+                      className="flex items-center gap-2 rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2 font-label-md font-bold text-on-surface shadow-sm transition-all hover:bg-surface-container-high active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        login
+                      </span>
+                      <span>Join Workspace</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowCreateWsModal(true)}
+                      className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white shadow-sm transition-all hover:bg-primary/90 active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        add
+                      </span>
+                      <span>New Workspace</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Action Cards */}
                 <div className="grid grid-cols-1 gap-stack-md sm:grid-cols-2 lg:grid-cols-3">
                   <div
@@ -497,14 +581,22 @@ export default function Dashboard() {
                         No Workspaces Found
                       </h3>
                       <p className="mt-1 text-sm text-secondary">
-                        Create your first workspace to start collaborating.
+                        Create a new workspace, or join one a teammate invited you to.
                       </p>
-                      <button
-                        onClick={() => setShowCreateWsModal(true)}
-                        className="mt-4 rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white"
-                      >
-                        Create Workspace
-                      </button>
+                      <div className="mt-4 flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setShowCreateWsModal(true)}
+                          className="rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white"
+                        >
+                          Create Workspace
+                        </button>
+                        <button
+                          onClick={() => setShowJoinWsModal(true)}
+                          className="rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-2 font-label-md font-bold text-on-surface hover:bg-surface-container-high"
+                        >
+                          Join Workspace
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 gap-stack-md sm:grid-cols-2 lg:grid-cols-3">
@@ -554,7 +646,24 @@ export default function Dashboard() {
             )}
 
             {/* TAB CONTENT 2: FILES */}
-            {activeTab === 'files' && (
+            {activeTab === 'files' && !selectedWorkspace && (
+              <div className="flex h-[450px] flex-col items-center justify-center rounded-2xl border border-outline-variant bg-surface-container-lowest p-8 text-center shadow-sm">
+                <span className="material-symbols-outlined mb-3 text-4xl text-outline">
+                  folder_off
+                </span>
+                <p className="mb-4 font-body-md text-secondary">
+                  No workspace selected. Create or select a workspace to view files.
+                </p>
+                <button
+                  onClick={() => setActiveTab('workspaces')}
+                  className="rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white hover:bg-primary/90"
+                >
+                  Go to Workspaces
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'files' && selectedWorkspace && (
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 {/* File List / Explorer */}
                 <div className="lg:col-span-4 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
@@ -642,11 +751,15 @@ export default function Dashboard() {
                           This is a folder. Select a code file to view/edit content.
                         </div>
                       ) : (
-                        <textarea
+                        <MonacoEditor
                           value={fileContent}
-                          onChange={(e) => setFileContent(e.target.value)}
-                          placeholder="Type code here..."
-                          className="flex-1 w-full font-mono text-sm bg-surface-container-low p-4 rounded-xl border border-outline-variant outline-none focus:ring-2 focus:ring-primary/20 resize-none min-h-[350px]"
+                          onChange={(value) => setFileContent(value || '')}
+                          language={selectedFile.name?.split('.').pop() ?? 'javascript'}
+                          height="350px"
+                          className="flex-1 w-full"
+                          fileId={selectedFile.id}
+                          currentUser={user}
+                          problemTitle={selectedFile.name}
                         />
                       )}
                     </>
@@ -665,7 +778,24 @@ export default function Dashboard() {
             )}
 
             {/* TAB CONTENT 3: CHAT */}
-            {activeTab === 'chat' && (
+            {activeTab === 'chat' && !selectedWorkspace && (
+              <div className="flex h-[550px] flex-col items-center justify-center rounded-2xl border border-outline-variant bg-surface-container-lowest p-8 text-center shadow-sm">
+                <span className="material-symbols-outlined mb-3 text-4xl text-outline">
+                  forum
+                </span>
+                <p className="mb-4 font-body-md text-secondary">
+                  No workspace selected. Create or select a workspace to start chatting.
+                </p>
+                <button
+                  onClick={() => setActiveTab('workspaces')}
+                  className="rounded-xl bg-primary px-4 py-2 font-label-md font-bold text-white hover:bg-primary/90"
+                >
+                  Go to Workspaces
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'chat' && selectedWorkspace && (
               <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-sm flex flex-col h-[550px]">
                 <div className="mb-4 border-b border-outline-variant pb-3 flex items-center justify-between">
                   <div>
@@ -673,12 +803,22 @@ export default function Dashboard() {
                       Team Live Chat
                     </h3>
                     <p className="text-xs text-secondary">
-                      Workspace: {selectedWorkspace?.name || 'Hackathon Team'}
+                      Workspace: {selectedWorkspace.name}
                     </p>
                   </div>
-                  <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Socket.IO Connected
+                  <span
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                      socketConnected
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                        : 'border-red-200 bg-red-50 text-red-600'
+                    }`}
+                  >
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        socketConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
+                      }`}
+                    />
+                    {socketConnected ? 'Socket.IO Connected' : 'Disconnected'}
                   </span>
                 </div>
 
@@ -694,7 +834,7 @@ export default function Dashboard() {
                     </p>
                   ) : (
                     chatMessages.map((msg, i) => {
-                      const isMe = msg.senderId === user?.id || msg.sender?.name === 'pihu'
+                      const isMe = msg.senderId === user?.id
                       return (
                         <div
                           key={msg.id || i}
@@ -961,6 +1101,57 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* JOIN WORKSPACE MODAL */}
+      {showJoinWsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface p-6 shadow-2xl">
+            <h3 className="font-headline-md font-bold text-on-surface mb-2">
+              Join a Workspace
+            </h3>
+            <p className="text-xs text-secondary mb-4">
+              Paste an invite code a teammate shared with you (or open their invite link directly).
+            </p>
+
+            {joinWsError && (
+              <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-600">
+                {joinWsError}
+              </div>
+            )}
+
+            <form onSubmit={handleJoinByCode} className="space-y-4">
+              <input
+                type="text"
+                value={joinCodeInput}
+                onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+                placeholder="e.g. X7K2P9QZ"
+                className="w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-4 py-3 font-mono text-sm uppercase tracking-widest outline-none focus:ring-2 focus:ring-primary/20"
+                required
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowJoinWsModal(false)
+                    setJoinWsError('')
+                  }}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-secondary hover:bg-surface-container-high"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isJoiningWs}
+                  className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isJoiningWs ? 'Joining...' : 'Join'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* INVITE MEMBER MODAL */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
@@ -980,6 +1171,43 @@ export default function Dashboard() {
                 {inviteFeedback}
               </div>
             )}
+
+            {selectedWorkspace?.inviteCode && (
+              <div className="mb-4 rounded-xl border border-outline-variant bg-surface-container-lowest p-3">
+                <p className="mb-2 text-xs font-semibold text-secondary">
+                  Share this link — anyone with it can join instantly
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={`${window.location.origin}/join/${selectedWorkspace.inviteCode}`}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 truncate rounded-lg border border-outline-variant bg-surface px-3 py-2 font-mono text-xs text-secondary outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteLink}
+                    className="whitespace-nowrap rounded-lg bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/20"
+                  >
+                    {copyLinkFeedback || 'Copy Link'}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-secondary">
+                  Invite code:{' '}
+                  <span className="font-mono font-bold tracking-widest text-primary">
+                    {selectedWorkspace.inviteCode}
+                  </span>
+                </p>
+              </div>
+            )}
+
+            <div className="mb-4 flex items-center gap-2">
+              <div className="h-px flex-1 bg-outline-variant" />
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                or invite by email
+              </span>
+              <div className="h-px flex-1 bg-outline-variant" />
+            </div>
 
             <form onSubmit={handleInviteMember} className="space-y-4">
               <input

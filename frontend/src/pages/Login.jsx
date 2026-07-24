@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import AuthSidePanel from '../components/AuthSidePanel.jsx'
 import { GoogleIcon, GithubIcon } from '../components/icons.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login, loading, error, clearError } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -24,7 +25,7 @@ export default function Login() {
 
     const result = await login(email, password)
     if (result.success) {
-      navigate('/dashboard')
+      navigate(location.state?.redirectTo || '/dashboard')
     }
   }
 
@@ -153,6 +154,7 @@ export default function Login() {
             <Link
               className="font-bold text-primary hover:underline"
               to="/signup"
+              state={location.state}
             >
               Create an account
             </Link>

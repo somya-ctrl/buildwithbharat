@@ -193,6 +193,106 @@ export function CodeAssistantIllustration() {
   )
 }
 
+export function CollaborativeEditorIllustration() {
+  return (
+    <svg viewBox="0 0 400 510" preserveAspectRatio="xMidYMid slice" className="h-full w-full">
+      <defs>
+        <linearGradient id="glow3" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#60a5fa" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="cursorA" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#60a5fa" />
+          <stop offset="100%" stopColor="#1d4ed8" />
+        </linearGradient>
+        <linearGradient id="cursorB" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#38bdf8" />
+          <stop offset="100%" stopColor="#0ea5e9" />
+        </linearGradient>
+        <filter id="soft3" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow
+            dx="0"
+            dy="10"
+            stdDeviation="14"
+            floodColor="#1e293b"
+            floodOpacity="0.12"
+          />
+        </filter>
+      </defs>
+
+      <circle cx="200" cy="220" r="160" fill="url(#glow3)" />
+
+      {/* editor window */}
+      <g filter="url(#soft3)">
+        <rect
+          x="55"
+          y="140"
+          width="290"
+          height="230"
+          rx="16"
+          fill="#ffffff"
+          stroke="#e2e8f0"
+        />
+        <circle cx="80" cy="164" r="4" fill="#fca5a5" />
+        <circle cx="94" cy="164" r="4" fill="#fde68a" />
+        <circle cx="108" cy="164" r="4" fill="#86efac" />
+        <text x="200" y="168" textAnchor="middle" fontFamily={CODE_FONT} fontSize="9" fill="#94a3b8">
+          app.tsx
+        </text>
+
+        <text x="76" y="196" fontFamily={CODE_FONT} fontSize="9" fill="#94a3b8">
+          function sync(doc) {'{'}
+        </text>
+        <text x="90" y="214" fontFamily={CODE_FONT} fontSize="9" fill="#0f172a">
+          broadcast(doc.changes)
+        </text>
+
+        {/* collaborator A cursor + selection */}
+        <rect x="88" y="222" width="86" height="14" rx="3" fill="#dbeafe" />
+        <rect x="88" y="222" width="2" height="14" fill="url(#cursorA)" />
+        <text x="76" y="250" fontFamily={CODE_FONT} fontSize="9" fill="#94a3b8">
+          {'}'}
+        </text>
+
+        <text x="76" y="272" fontFamily={CODE_FONT} fontSize="9" fill="#94a3b8">
+          editor.on(&apos;update&apos;,
+        </text>
+        {/* collaborator B cursor + selection */}
+        <rect x="90" y="280" width="110" height="14" rx="3" fill="#e0f2fe" />
+        <rect x="200" y="280" width="2" height="14" fill="url(#cursorB)" />
+        <text x="90" y="298" fontFamily={CODE_FONT} fontSize="9" fill="#0f172a">
+          render)
+        </text>
+
+        {/* live sync badge */}
+        <rect x="255" y="340" width="70" height="22" rx="11" fill="#ecfdf5" stroke="#a7f3d0" />
+        <circle cx="269" cy="351" r="4" fill="#22c55e" />
+        <text x="280" y="355" fontFamily={UI_FONT} fontSize="9" fontWeight="600" fill="#15803d">
+          Live sync
+        </text>
+      </g>
+
+      {/* collaborator avatar chips */}
+      <g transform="translate(70 96)">
+        <circle r="18" fill="url(#cursorA)" />
+        <path d="M-8 -2a8 8 0 1 1 16 0 8 8 0 0 1-16 0z" fill="#ffffff" fillOpacity="0.9" />
+      </g>
+      <g transform="translate(330 96)">
+        <circle r="18" fill="url(#cursorB)" />
+        <path d="M-8 -2a8 8 0 1 1 16 0 8 8 0 0 1-16 0z" fill="#ffffff" fillOpacity="0.9" />
+      </g>
+      <path
+        d="M88 96 C 150 70, 250 70, 312 96"
+        stroke="#93c5fd"
+        strokeWidth="2"
+        strokeDasharray="1 6"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  )
+}
+
 export function TeamCollabIllustration() {
   return (
     <svg viewBox="0 0 400 510" preserveAspectRatio="xMidYMid slice" className="h-full w-full">

@@ -27,6 +27,7 @@ model Workspace {
   name             String
   ownerId          String
   owner            User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  inviteCode       String            @unique
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   members          WorkspaceMember[]

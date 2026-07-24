@@ -53,6 +53,8 @@ export const workspaceAPI = {
   rename: (id, name) => api.patch(`/workspaces/${id}`, { name }),
   delete: (id) => api.delete(`/workspaces/${id}`),
   invite: (id, email) => api.post(`/workspaces/${id}/invite`, { email }),
+  joinByCode: (code) => api.post('/workspaces/join', { code }),
+  regenerateInviteCode: (id) => api.post(`/workspaces/${id}/invite-code/regenerate`),
   getMembers: (id) => api.get(`/workspaces/${id}/members`),
   removeMember: (id, memberId) => api.delete(`/workspaces/${id}/members/${memberId}`),
 }
@@ -86,6 +88,21 @@ export const meetingAPI = {
 export const notificationAPI = {
   list: () => api.get('/notifications'),
   markRead: (ids) => api.patch('/notifications/read', ids ? { ids } : {}),
+}
+
+// Separate service: ML code-analysis API (not part of the main backend)
+const ML_API_BASE_URL = import.meta.env.VITE_ML_API_URL || 'https://syncrova-codementor.onrender.com'
+
+const mlApi = axios.create({
+  baseURL: ML_API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+export const mlAPI = {
+  analyze: (code, language, problemTitle) =>
+    mlApi.post('/analyze', { code, language, problem_title: problemTitle }),
 }
 
 export default api

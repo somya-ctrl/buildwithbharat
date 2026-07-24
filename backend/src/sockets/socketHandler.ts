@@ -79,6 +79,15 @@ export const initSocketHandler = (io: Server) => {
       });
     });
 
+    socket.on('editor:leave', (data: { fileId: string; userId: string }) => {
+      const { fileId, userId } = data;
+      socket.leave(`editor:${fileId}`);
+      socket.to(`editor:${fileId}`).emit('editor:user-left', { userId });
+      if (currentFileId === fileId) {
+        currentFileId = null;
+      }
+    });
+
     socket.on('editor:cursor', (data: { fileId: string; cursor: { line: number; ch: number }; user: { id: string; name: string; color?: string } }) => {
       const { fileId, cursor, user } = data;
       // Broadcast cursor movements to everyone else in this file's editor room
@@ -140,8 +149,9 @@ export const initSocketHandler = (io: Server) => {
           },
         });
 
-        // Broadcast message to everyone in the workspace
-        io.to(`workspace:${workspaceId}`).emit('chat:receive', message);
+        // Broadcast message to everyone else in the workspace (sender already
+        // shows it optimistically on their own screen)
+        socket.to(`workspace:${workspaceId}`).emit('chat:receive', message);
       } catch (err) {
         console.error('Error saving chat message to db via socket:', err);
       }

@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react'
-import { CodeAssistantIllustration, TeamCollabIllustration } from './illustrations.jsx'
+import {
+  CodeAssistantIllustration,
+  CollaborativeEditorIllustration,
+  TeamCollabIllustration,
+} from './illustrations.jsx'
 
 const AUTO_ADVANCE_MS = 4000
 
 const CAROUSEL_SLIDES = [
   {
-    type: 'image',
-    src: 'https://lh3.googleusercontent.com/aida/AP1WRLtu9It7phsiUv8p3ijDpMSXUqXVRywMRlDPkSKVi-sc8qI0zHSjEtthuWQuxdRjSrzl7SImbzMuPKZi0nWH839O1H2rGHNoCzwSueytskuIuQXSoLv1MavqVqIFQ-wUYPmkQl3V8Tuph8br5M1zyiXbx71ceuIDAqI4GIVukp0YCyiKHa3JyAndgtqWwS7G4YACdx2eH7HlqvVc5dUaEMS2pXpEIHKk84MLC9kBzlviS2fpsaZmFtAvRxPh',
-    alt: 'Collaborative Editor',
+    Component: CollaborativeEditorIllustration,
+    alt: 'Two collaborators editing the same file in real time',
   },
   {
-    type: 'illustration',
     Component: CodeAssistantIllustration,
     alt: 'AI-powered code editor and assistant illustration',
   },
   {
-    type: 'illustration',
     Component: TeamCollabIllustration,
     alt: 'Diverse developers collaborating in a shared digital workspace',
   },
@@ -42,15 +43,7 @@ export default function AuthSidePanel() {
                 i === active ? 'opacity-100' : 'opacity-0'
               }`}
             >
-              {slide.type === 'image' ? (
-                <img
-                  src={slide.src}
-                  alt={slide.alt}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <slide.Component />
-              )}
+              <slide.Component />
             </div>
           ))}
         </div>
